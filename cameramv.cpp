@@ -11,7 +11,7 @@ CameraMV::~CameraMV()
 {
 }
 
-int CameraMV::initial(bool isTrigger)
+int CameraMV::init(bool isTrigger)
 {
     int CameraCount=devMgr.deviceCount();
     if(CameraCount<2){

@@ -1,14 +1,21 @@
 ﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+#include <QHBoxLayout>
+#include <QSlider>
+
 #include "imageviewer.h"
 #include <fstream>
 #include "imageshow.h"
 #include "mat3.h"
+#include "calib.h"
+#include "features.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
-    ui(new Ui::MainWindow),nineImagesMaker(imageWidth,imageHeight)
+    ui(new Ui::MainWindow),
+    nineImagesMaker(imageWidth,imageHeight),
+    nineGrayCodeMaker(imageWidth, imageHeight, projectionWidth, projectionHeight)
 {
     ui->setupUi(this);
 
@@ -18,9 +25,9 @@ MainWindow::MainWindow(QWidget *parent) :
     frmL=new unsigned char[3*imageWidth*imageHeight];
     frmR=new unsigned char[3*imageWidth*imageHeight];
     cameraViewer=0;
-    cameraTimer=0;
+    /*cameraTimer=0;
     startButn=0;
-    stopButn=0;
+    stopButn=0;*/
 
     projection=new Projection(this);
     projection->hide();
@@ -38,6 +45,11 @@ MainWindow::~MainWindow()
 
     if(modelShow){
         delete modelShow;
+    }
+
+    if (camera) {
+        camera->close();
+        delete camera;
     }
 }
 
@@ -93,14 +105,17 @@ void MainWindow::on_actionFull_Black_triggered()
     projectFringes(BK);
 }
 
+
+
 void MainWindow::on_actionNine_Images_Maker_triggered()
 {
     QDir dir(workDirectory); //进入工作目录
     if(!dir.exists() || workDirectory==""){
-        QMessageBox::warning(this,"Entering Workspace error!","No workspace has been opened!");
+        QMessageBox::warning(this,"Entering Workspace error!","No workspace has been opened!\n"
+                             "Please create a new workspace or open an existing workspace.");
         return; //Nothing happen
     }
-    dir.mkdir("NineImages"); //建立"NineImages"目录，或者已经存在
+    dir.mkdir("NineImages"); //建立"NineImages"目录, 或者已经存在
     //QString dirSelected=QFileDialog::getExistingDirectory(this,"Select Directory with Nine*2 Raw Images",dir.absolutePath()); //选择目录对话框
     //if(!dirSelected.isEmpty()){ //选择的目录
     //    dir.setPath(dirSelected);
@@ -110,11 +125,12 @@ void MainWindow::on_actionNine_Images_Maker_triggered()
     //}
 
     if(!nineImagesMaker.initialMaker(dir)){
-        QMessageBox::warning(this,"Reading images error!","The directory \""+dir.absolutePath()+"\" doesn't have nine*2 specified images!");
+        QMessageBox::warning(this,"Reading images error!","The directory \""+dir.absolutePath()+"\" doesn't have nine*2 specified images!"
+                             "Please check if they have correct filenames.");
         return;
     }
 
-    dir.cdUp(); //返回上一级目录
+    dir.cdUp(); // 返回上一级目录
     QString image3DName("NineImagesModel.md");
     //image3DName=QFileDialog::getSaveFileName(this,"Save NineImagesModel File",
     //                            dir.absoluteFilePath(image3DName),"Model (*.md)");
@@ -128,8 +144,10 @@ void MainWindow::on_actionNine_Images_Maker_triggered()
         QMessageBox::warning(this,"Makeing 3D model error!","Failed in makeing 3D model !");
         return;
     }
-    QMessageBox::information(this,"Object model making succeeds!","Object model information have been output to file \""+image3DName+"\".");
+    QMessageBox::information(this,"Object model making succeeds!","Object model information have been output to file:\n\""+image3DName+"\".");
 }
+
+
 
 void MainWindow::on_actionObject_Coordinates_Output_triggered()
 {
@@ -148,21 +166,25 @@ void MainWindow::on_actionObject_Coordinates_Output_triggered()
         QMessageBox::warning(this,tr("Object coordinates output error!"),tr("Reading file \"NineImagesModel.md\" failed!"));
         return;
     }
+    /*
     QString outFileName("ObjectCoors.txt");
     if(!writeImage3DCoordinates(dir.absoluteFilePath(outFileName).toStdString(),image,imageWidth,imageHeight)){
         QMessageBox::warning(this,tr("Object coordinates output error!"),tr("Writing file \"ObjectCoors.txt\" failed!"));
         return;
     }
-    /*
+    */
+
     QString pcdFileName("ObjectCoors.pcd");
     if(!writeToPCD(dir.absoluteFilePath(pcdFileName).toStdString(),image,imageWidth,imageHeight)){
         QMessageBox::warning(this,tr("Object coordinates output error!"),tr("Writing file \"ObjectCoors.pcd\" failed!"));
         return;
     }
-    */
+
     delete [] image;
     QMessageBox::information(this,tr("Object coordinates output succeeds!"),tr("Object coordinates have been output to file \"ObjectCoors.txt\" and \"ObjectCoors.pcd\"."));
 }
+
+
 
 void MainWindow::on_actionNine_Images_Show_triggered()
 {
@@ -170,50 +192,63 @@ void MainWindow::on_actionNine_Images_Show_triggered()
     imageViewer.exec();
 }
 
+
+
+
 void MainWindow::on_actionNew_Workspace_triggered()
 {
-    QDir dir=QDir::currentPath(); //返回当前目录
-    QString workspaceName=QFileDialog::getSaveFileName(this,tr("Select directory and input name for creating a new Workspace"),
-                                          dir.absolutePath());
-    if(!workspaceName.isEmpty()){ //选择的目录
-        dir.mkdir(workspaceName);
-        dir.cd(workspaceName);
+    QDir dir = QDir::currentPath(); //返回当前目录
+    QString directory = QFileDialog::getSaveFileName(this,
+                                                         tr("Select directory and input name to create a new Workspace"),
+                                                         dir.absolutePath());
+    if (!directory.isEmpty()) { //选择的目录
+        dir.mkdir(directory);
+        dir.cd(directory);
         /*if(dir.exists("Workspace.sv")){
             QMessageBox::warning(this,tr("Create Workspace error!"),tr("Workspace has exist in this directory!"));
             return;
         }*/
         std::ofstream workspaceFile;
-        workspaceFile.open((workspaceName+"/Workspace.sv").toStdString().c_str());
+        workspaceFile.open((directory+"/Workspace.sv").toStdString().c_str());
         workspaceFile.close();
         dir.mkdir("NineImages");
         dir.mkdir("TwoCamCalibData");
-        workDirectory=workspaceName;
+        workDirectory = directory;
         setWindowTitle("Stereo Vision: Workspace \""+workDirectory+"\"");
-    }
-    else{ //若点击“取消”按钮
-        QMessageBox::warning(this,tr("Create Workspace error!"),tr("No new workspace name specified!"));
+    } else { //若点击“取消”按钮
+        //QMessageBox::warning(this,tr("Create Workspace error!"),tr("No new workspace name specified!"));
         return;
     }
 }
 
 void MainWindow::on_actionOpen_Workspace_triggered()
 {
-    QDir dir=QDir::currentPath(); //返回当前目录
-    QString workspaceName=QFileDialog::getExistingDirectory(this,tr("Open a Workspace directory"),dir.absolutePath()); //选择目录对话框
-    if(!workspaceName.isEmpty()){ //选择的目录
-        dir.cd(workspaceName);
+    QDir dir = QDir::currentPath(); //返回当前目录
+    QString directory = QFileDialog::getExistingDirectory(this,
+                                                              tr("Open a Workspace directory"),
+                                                              dir.absolutePath()); //选择目录对话框
+    if (!directory.isEmpty()) { //选择的目录
+        dir.cd(directory);
         if(!dir.exists("Workspace.sv")){
-            QMessageBox::warning(this,tr("Open Workspace error!"),tr("Workspace hasn\'t exist in this directory!"));
+            QMessageBox::warning(this,
+                                 tr("Open Workspace error!"),
+                                 tr("Workspace hasn\'t exist in this directory!"));
             return;
         }
-        workDirectory=workspaceName;
+        workDirectory = directory;
         setWindowTitle("Stereo Vision: Workspace \""+workDirectory+"\"");
-    }
-    else{ //若点击“取消”按钮
-        QMessageBox::warning(this,tr("Create Workspace error!"),tr("No new workspace name specified!"));
+    } else { //若点击“取消”按钮
+        //QMessageBox::warning(this, tr("Open Workspace error!"), tr("No existing workspace name specified!"));
         return;
     }
+
+    calib::test();
+    calib::test2();
+
+    //features::testHarrisCorner();
 }
+
+
 
 void MainWindow::on_actionLeft_Horizontal_triggered()
 {
@@ -235,44 +270,47 @@ void MainWindow::on_actionRight_Vertical_triggered()
     phaseMapShow(3);
 }
 
-
-
 void MainWindow::phaseMapShow(int phaseNo)
 {
-    static double max=nineImagesMaker.phaseMax();
-    static double min=nineImagesMaker.phaseMin();
-    double Mm=max-min;
-    int base=50;
-    int width=nineImagesMaker.getWidth();
-    int height=nineImagesMaker.getHeight();
-    int size=nineImagesMaker.getSize();
-    double *phase=nineImagesMaker.phase+size*phaseNo;
-    unsigned char *mask=nineImagesMaker.mask+size*phaseNo;
-    unsigned char *mapImage=new unsigned char[size];
-    for(int i=0;i<size;i++){
-        if(mask[i] == UNWRAPDONE){
-            mapImage[i]=base+(phase[i]-min)/Mm*(255-base);
-        }
-        else
+    NineImagesMaker &maker = nineGrayCodeMaker;
+
+    double max, min;
+    maker.getPhaseMaxMin(max, min);
+    double Mm = max - min;
+    int base = 50;
+    int width = maker.getWidth();
+    int height = maker.getHeight();
+    int size = maker.getSize();
+    double *phase = maker.phase + size * phaseNo;
+    unsigned char *mask = maker.mask + size * phaseNo;
+    unsigned char *mapImage = new unsigned char[size];
+    for (int i = 0; i < size; i++) {
+        if (mask[i] == UNWRAPDONE) {
+            mapImage[i] = base + (phase[i]-min) / Mm * (255-base);
+        } else
             mapImage[i]=0;
     }
     ImageShow imageShow;
-    imageShow.init(tr("directshow"),width,height,mapImage);
-    imageShow.setGeometry(0,0,width,height);
+    imageShow.init(tr("directshow"), width, height, mapImage);
+    imageShow.setGeometry(0, 0, width, height);
     imageShow.exec();
 }
 
+
+
 void MainWindow::on_actionOutput_ALL_Four_triggered()
 {
-    int width=nineImagesMaker.getWidth();
-    int height=nineImagesMaker.getHeight();
-    int size=nineImagesMaker.getSize();
+    NineImagesMaker &maker = nineGrayCodeMaker;
 
-    for(int phaseNo=0;phaseNo<4;phaseNo++){
-        double *phase=nineImagesMaker.phase+size*phaseNo;
-        unsigned char *mask=nineImagesMaker.mask+size*phaseNo;
+    int width=maker.getWidth();
+    int height=maker.getHeight();
+    int size=maker.getSize();
+
+    for (int phaseNo = 0; phaseNo < 4; phaseNo++) {
+        double *phase = maker.phase + size*phaseNo;
+        unsigned char *mask = maker.mask + size*phaseNo;
         QString fileName;
-        switch(phaseNo){
+        switch (phaseNo) {
         case 0:
             fileName="phasemapLeftHori.txt";
             break;
@@ -288,14 +326,15 @@ void MainWindow::on_actionOutput_ALL_Four_triggered()
         }
         QDir dir(workDirectory); //进入工作目录
         std::ofstream outFile(dir.absoluteFilePath(fileName).toStdString().c_str());
-        for(int i=0;i<height;i++){
-            for(int j=0;j<width;j++){
-                if(mask[i*width+j] == UNWRAPDONE)
-                    outFile<<phase[i*width+j]<<" ";
-                else
-                    outFile<<0<<" ";
+        for (int i = 0; i < height; i++) {
+            for (int j = 0;j < width; j++){
+                if (mask[i*width + j] == UNWRAPDONE)
+                    outFile << i+1 << " " << j+1 << " " << phase[i*width+j] << endl;
+                    //outFile << phase[i*width+j] << " ";
+                //else
+                    //outFile << 0 << " ";
             }
-            outFile<<std::endl;
+            //outFile<<std::endl;
         }
         outFile.close();
     }
@@ -360,17 +399,21 @@ void MainWindow::on_actionRestructed_Model_Show_triggered()
     delete [] image;
 }
 
+
+
 void MainWindow::on_actionOpen_Cameras_triggered()
 {
-    if(camera){
+    if (camera) {
         //close cameras
         camera->close();
         delete camera;
         camera=0;
     }
-    camera=new CameraMV(imageWidth,imageHeight);
-    if(camera->initial(false)==-1){
-        QMessageBox::warning(this,"Open Cameras Error",camera->getErrorString().c_str());
+#ifdef HAS_POINT_GREY
+    camera = new CameraPointGrey(imageWidth,imageHeight);
+#endif
+    if (camera->init(false) == -1) {
+        QMessageBox::warning(this,"Open Cameras Error", camera->getErrorString().c_str());
         camera->close();
         delete camera;
         camera=0;
@@ -379,15 +422,26 @@ void MainWindow::on_actionOpen_Cameras_triggered()
 
 void MainWindow::on_actionOpen_Triggered_Cameras_triggered()
 {
-    if(camera){
+    if (camera) {
         //close cameras
         camera->close();
         delete camera;
         camera=0;
     }
-    camera=new CameraMV(imageWidth,imageHeight);
-    if(camera->initial(true)==-1){
-        QMessageBox::warning(this,"Open Triggered Cameras Error",camera->getErrorString().c_str());
+#ifdef HAS_POINT_GREY
+    camera = new CameraPointGrey(imageWidth,imageHeight);
+#endif
+    if (camera->init(true) == -1) {
+        QMessageBox::warning(this,"Open Triggered Cameras Error", camera->getErrorString().c_str());
+        camera->close();
+        delete camera;
+        camera=0;
+    }
+}
+
+void MainWindow::on_actionClose_Cameras_triggered()
+{
+    if (camera) {
         camera->close();
         delete camera;
         camera=0;
@@ -396,8 +450,8 @@ void MainWindow::on_actionOpen_Triggered_Cameras_triggered()
 
 void MainWindow::on_actionCameras_Viewer_triggered()
 {
-    if(!camera)
-        on_actionOpen_Triggered_Cameras_triggered();
+    if (!camera)
+        on_actionOpen_Cameras_triggered();
 
 //    if(frmL)
 //        delete [] frmL;
@@ -406,108 +460,73 @@ void MainWindow::on_actionCameras_Viewer_triggered()
 //    frmL=new unsigned char[3*imageWidth*imageHeight];
 //    frmR=new unsigned char[3*imageWidth*imageHeight];
 
-    cameraViewer =new CameraViewer(this,imageWidth,imageHeight);
-    if(cameraTimer)
-        delete cameraTimer;
-    cameraTimer=new QTimer(this);
-    connect(cameraTimer,SIGNAL(timeout()),this,SLOT(grabFrames()));
-    cameraTimer->start(200);
-    if(startButn) delete startButn;
-    if(stopButn) delete stopButn;
-    startButn=new QPushButton("Start",cameraViewer);
-    stopButn=new QPushButton("Stop",cameraViewer);
-    QLabel *snapshotLabel=new QLabel("Snapshot index:",cameraViewer);
-    snapshotSpin=new QSpinBox(cameraViewer);
-    snapshotButn=new QPushButton("Snapshot",cameraViewer);
-    startButn->setGeometry(20,20,60,30);
-    stopButn->setGeometry(20+60+20,20,60,30);
-    snapshotLabel->setGeometry(20+60+20+60+20,20,80,30);
-    snapshotSpin->setGeometry(20+60+20+60+20+80+20,20,60,30);
-    snapshotSpin->setMinimum(0);snapshotSpin->setMaximum(100);
-    snapshotButn->setGeometry(20+60+20+60+20+60+30+60+20,20,60,30);
-    startButn->setEnabled(false);
-    connect(startButn,SIGNAL(clicked()),this,SLOT(startCameraTimer()));
-    connect(stopButn,SIGNAL(clicked()),this,SLOT(stopCameraTimer()));
-    connect(snapshotSpin,SIGNAL(valueChanged(int)),this,SLOT(snapshot(int)));
-    connect(snapshotButn,SIGNAL(clicked()),this,SLOT(snapshot()));
-    cameraViewer->setWindowTitle("Camera Viewer");
+    cameraViewer = new CameraViewer(this, camera, imageWidth, imageHeight);
+//    if (!cameraTimer) {
+//        cameraTimer = new QTimer(this);
+//        connect(cameraTimer, SIGNAL(timeout()), this, SLOT(grabFrames()));
+//    }
+//    cameraTimer->start(200);
+//    startButn = new QPushButton("Start");
+//    stopButn = new QPushButton("Stop");
+//    QLabel *snapshotLabel = new QLabel("Snapshot index:");
+//    snapshotSpin = new QSpinBox;
+//    snapshotButn = new QPushButton("Snapshot");
+//    QHBoxLayout *layout = new QHBoxLayout;
+//    layout->addWidget(startButn);
+//    layout->addWidget(stopButn);
+//    layout->addWidget(snapshotLabel);
+//    layout->addWidget(snapshotSpin);
+//    layout->addWidget(snapshotButn);
+//    cameraViewer->setLayout(layout);
+//    //startButn->setGeometry(20,20,60,30);
+//    //stopButn->setGeometry(20+60+20,20,60,30);
+//    //snapshotLabel->setGeometry(20+60+20+60+20,20,80,30);
+//    //snapshotSpin->setGeometry(20+60+20+60+20+80+20,20,60,30);
+//    snapshotSpin->setMinimum(0);
+//    snapshotSpin->setMaximum(100);
+//    //snapshotButn->setGeometry(20+60+20+60+20+60+30+60+20,20,60,30);
+//    startButn->setEnabled(false);
+//    connect(startButn, SIGNAL(clicked()), this, SLOT(startCameraTimer()));
+//    connect(stopButn, SIGNAL(clicked()), this, SLOT(stopCameraTimer()));
+//    connect(snapshotSpin, SIGNAL(valueChanged(int)), this, SLOT(snapshot(int)));
+//    connect(snapshotButn, SIGNAL(clicked()), this, SLOT(snapshot()));
+//    cameraViewer->setWindowTitle("Camera Viewer");
     cameraViewer->show();
 }
 
-void MainWindow::grabFrames()
-{
-    //camera->grabSingleFrame(cameraViewer->frmL,0);
-    //camera->grabSingleFrame(cameraViewer->frmR,1);
 
-    camera->grabMultiFrames(frmL,3,0);
-    camera->grabMultiFrames(frmR,3,1);
-    for(unsigned int i=0;i<imageWidth*imageHeight;i++){
-        cameraViewer->frmL[i]=(int(frmL[i])+frmL[i+imageWidth*imageHeight]+frmL[i+2*imageWidth*imageHeight])/3;
-        cameraViewer->frmR[i]=(int(frmR[i])+frmR[i+imageWidth*imageHeight]+frmR[i+2*imageWidth*imageHeight])/3;
-    }
-
-    cameraViewer->update();
-}
-
-void MainWindow::startCameraTimer()
-{
-    startButn->setEnabled(false);
-    stopButn->setEnabled(true);
-    cameraTimer->start();
-}
-
-void MainWindow::stopCameraTimer()
-{
-    startButn->setEnabled(true);
-    stopButn->setEnabled(false);
-    cameraTimer->stop();
-}
-
-void MainWindow::snapshot(int spinIndex)
-{
-    static int index=0;
-    if(spinIndex==-1){
-        QDir dir(workDirectory); //进入工作目录
-        if(!dir.exists() || workDirectory==""){
-            QMessageBox::warning(this,tr("Entering Workspace error!"),tr("No workspace has been opened!"));
-            return;
-        }
-        dir.mkdir("SnapshotImages");
-        dir.cd(QString("SnapshotImages"));
-        cameraViewer->fileNameL=dir.absoluteFilePath(QString("L")+QString().setNum(index)+".jpg");
-        cameraViewer->fileNameR=dir.absoluteFilePath(QString("R")+QString().setNum(index)+".jpg");
-        cameraViewer->isSave=true;
-        index++;
-        snapshotSpin->setValue(index);
-    }
-    else
-        index=spinIndex;
-}
 
 void MainWindow::on_actionProjection_Control_triggered()
 {
-    projection->fringeType=-1;
+    projection->fringeType = -1;
     projection->update();
     projection->show();
+    //projection->controlDialog->findChild<QSlider *>()->setValue(0);
     projection->controlDialog->show();
+    projection->setFringeType(0);
 }
 
 void MainWindow::on_actionProject_and_Capture_triggered()
 {
+    if (!camera)
+        on_actionOpen_Cameras_triggered();
+
     if(pcTimer)
         delete pcTimer;
-    pcTimer=new QTimer(this);
-    projection->fringeType=HF0;
+    pcTimer = new QTimer(this);
+    projection->fringeType = HF0;
     projection->update();
     projection->show();
-    connect(pcTimer,SIGNAL(timeout()),this,SLOT(projectAndCaptureTimer()));
+    connect(pcTimer, SIGNAL(timeout()), this, SLOT(projectAndCaptureAction()));
     pcTimer->start(800);
 }
 
-void MainWindow::projectAndCaptureTimer()
+void MainWindow::projectAndCaptureAction()
 {
-    camera->grabMultiFrames(frmL,3,0);
-    camera->grabMultiFrames(frmR,3,1);
+    //camera->grabMultiFrames(frmL,3,0);
+    //camera->grabMultiFrames(frmR,3,1);
+    camera->grabSingleFrame(frmL, 0);
+    camera->grabSingleFrame(frmR, 1);
 
     QDir dir(workDirectory); //进入工作目录
     if(!dir.exists() || workDirectory==""){
@@ -519,10 +538,18 @@ void MainWindow::projectAndCaptureTimer()
 
     string fileNamesNineL[9]={"CamLhf0.raw","CamLhf1.raw","CamLhf2.raw","CamLvf0.raw","CamLvf1.raw","CamLvf2.raw","CamLhc.raw","CamLvc.raw","CamLbk.raw"};
     string fileNamesNineR[9]={"CamRhf0.raw","CamRhf1.raw","CamRhf2.raw","CamRvf0.raw","CamRvf1.raw","CamRvf2.raw","CamRhc.raw","CamRvc.raw","CamRbk.raw"};
+    /*
     string fileNamesGCL[19]={"CamLwt.raw","CamLgch0.raw","CamLgch1.raw","CamLgch2.raw","CamLgch3.raw","CamLgch4.raw","CamLgch5.raw","CamLgch6.raw","CamLgch7.raw","CamLgch8.raw",
                                           "CamLgcv0.raw","CamLgcv1.raw","CamLgcv2.raw","CamLgcv3.raw","CamLgcv4.raw","CamLgcv5.raw","CamLgcv6.raw","CamLgcv7.raw","CamLgcv8.raw"};
     string fileNamesGCR[19]={"CamRwt.raw","CamRgch0.raw","CamRgch1.raw","CamRgch2.raw","CamRgch3.raw","CamRgch4.raw","CamRgch5.raw","CamRgch6.raw","CamRgch7.raw","CamRgch8.raw",
                                           "CamRgcv0.raw","CamRgcv1.raw","CamRgcv2.raw","CamRgcv3.raw","CamRgcv4.raw","CamRgcv5.raw","CamRgcv6.raw","CamRgcv7.raw","CamRgcv8.raw"};
+    */
+    string fileNameWTL = "CamLwt.raw";
+    string fileNamesGCHL[] = {"CamLgch0.raw","CamLgch1.raw","CamLgch2.raw","CamLgch3.raw","CamLgch4.raw","CamLgch5.raw","CamLgch6.raw","CamLgch7.raw","CamLgch8.raw","CamLgch9.raw","CamLgch10.raw"};
+    string fileNamesGCVL[] = {"CamLgcv0.raw","CamLgcv1.raw","CamLgcv2.raw","CamLgcv3.raw","CamLgcv4.raw","CamLgcv5.raw","CamLgcv6.raw","CamLgcv7.raw","CamLgcv8.raw","CamLgcv9.raw","CamLgcv10.raw"};
+    string fileNameWTR = "CamRwt.raw";
+    string fileNamesGCHR[] = {"CamRgch0.raw","CamRgch1.raw","CamRgch2.raw","CamRgch3.raw","CamRgch4.raw","CamRgch5.raw","CamRgch6.raw","CamRgch7.raw","CamRgch8.raw","CamRgch9.raw","CamRgch10.raw"};
+    string fileNamesGCVR[] = {"CamRgcv0.raw","CamRgcv1.raw","CamRgcv2.raw","CamRgcv3.raw","CamRgcv4.raw","CamRgcv5.raw","CamRgcv6.raw","CamRgcv7.raw","CamRgcv8.raw","CamRgcv9.raw","CamRgcv10.raw"};
 
 
     QString imgName;
@@ -617,11 +644,12 @@ void MainWindow::projectAndCaptureTimer()
         projection->update();
         projection->show();
         break;
+
     case WT:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[0]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNameWTL));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[0]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNameWTR));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCH0;
         projection->update();
@@ -629,9 +657,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCH0:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[1]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHL[0]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[1]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHR[0]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCH1;
         projection->update();
@@ -639,9 +667,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCH1:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[2]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHL[1]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[2]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHR[1]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCH2;
         projection->update();
@@ -649,9 +677,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCH2:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[3]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHL[2]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[3]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHR[2]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCH3;
         projection->update();
@@ -659,9 +687,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCH3:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[4]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHL[3]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[4]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHR[3]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCH4;
         projection->update();
@@ -669,9 +697,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCH4:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[5]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHL[4]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[5]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHR[4]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCH5;
         projection->update();
@@ -679,9 +707,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCH5:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[6]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHL[5]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[6]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHR[5]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCH6;
         projection->update();
@@ -689,9 +717,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCH6:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[7]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHL[6]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[7]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHR[6]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCH7;
         projection->update();
@@ -699,9 +727,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCH7:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[8]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHL[7]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[8]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHR[7]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCH8;
         projection->update();
@@ -709,9 +737,19 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCH8:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[9]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHL[8]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[9]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHR[8]));
+        writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
+        projection->fringeType=GCH9;
+        projection->update();
+        projection->show();
+        break;
+    case GCH9:
+        dir.cd(QString("GrayCodeImages"));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHL[9]));
+        writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCHR[9]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCV0;
         projection->update();
@@ -719,9 +757,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCV0:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[10]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVL[0]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[10]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVR[0]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCV1;
         projection->update();
@@ -729,9 +767,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCV1:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[11]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVL[1]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[11]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVR[1]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCV2;
         projection->update();
@@ -739,9 +777,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCV2:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[12]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVL[2]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[12]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVR[2]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCV3;
         projection->update();
@@ -749,9 +787,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCV3:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[13]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVL[3]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[13]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVR[3]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCV4;
         projection->update();
@@ -759,9 +797,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCV4:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[14]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVL[4]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[14]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVR[4]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCV5;
         projection->update();
@@ -769,9 +807,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCV5:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[15]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVL[5]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[15]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVR[5]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCV6;
         projection->update();
@@ -779,9 +817,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCV6:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[16]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVL[6]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[16]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVR[6]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCV7;
         projection->update();
@@ -789,9 +827,9 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCV7:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[17]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVL[7]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[17]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVR[7]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=GCV8;
         projection->update();
@@ -799,9 +837,19 @@ void MainWindow::projectAndCaptureTimer()
         break;
     case GCV8:
         dir.cd(QString("GrayCodeImages"));
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCL[18]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVL[8]));
         writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
-        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCR[18]));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVR[8]));
+        writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
+        projection->fringeType=GCV9;
+        projection->update();
+        projection->show();
+        break;
+    case GCV9:
+        dir.cd(QString("GrayCodeImages"));
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVL[9]));
+        writeBytesToFile(imgName.toStdString(),frmL,imageWidth*imageHeight);
+        imgName=dir.absoluteFilePath(QString::fromStdString(fileNamesGCVR[9]));
         writeBytesToFile(imgName.toStdString(),frmR,imageWidth*imageHeight);
         projection->fringeType=-1;
         projection->update();
@@ -813,6 +861,8 @@ void MainWindow::projectAndCaptureTimer()
         break;
     }
 }
+
+
 
 void MainWindow::on_actionNine_Images_Average_triggered()
 {
@@ -853,3 +903,39 @@ void MainWindow::on_actionNine_Images_Average_triggered()
         writeBytesToFile(dir.absoluteFilePath(fileNamesNineR[j]).toStdString(),&imgR[j*imageWidth*imageHeight],imageWidth*imageHeight);
     }
 }
+
+
+
+void MainWindow::on_actionNine_Images_Gray_Code_Maker_triggered()
+{
+    QDir dir(workDirectory); //进入工作目录
+    if(!dir.exists() || workDirectory==""){
+        QMessageBox::warning(this,"Entering Workspace error!","No workspace has been opened!\n"
+                             "Please create a new workspace or open an existing workspace.");
+        return; //Nothing happen
+    }
+    dir.mkdir("NineImages"); //建立"NineImages"目录, 或者已经存在
+    dir.cd(QString("NineImages"));
+    QDir nineimagesDir = dir;
+    dir.cdUp();
+    dir.mkdir("GrayCodeImages");
+    dir.cd(QString("GrayCodeImages"));
+    QDir graycodeimagesDir = dir;
+
+    if(!nineGrayCodeMaker.initialMaker(nineimagesDir, graycodeimagesDir)){
+        QMessageBox::warning(this,"Reading images error!","The directory \""+dir.absolutePath()+"\" doesn't have nine*2 specified images!"
+                             "Please check if they have correct filenames.");
+        return;
+    }
+
+    dir.cdUp(); // 返回上一级目录
+    QString image3DName("NineImagesModel.md");
+    image3DName=dir.absoluteFilePath(QString("NineImagesModel.md"));
+
+    if(!nineGrayCodeMaker.make3Dmodel(image3DName.toStdString())){
+        QMessageBox::warning(this,"Makeing 3D model error!","Failed in makeing 3D model !");
+        return;
+    }
+    QMessageBox::information(this,"Object model making succeeds!","Object model information have been output to file:\n\""+image3DName+"\".");
+}
+

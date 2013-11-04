@@ -4,8 +4,8 @@
 #include <memory>
 #include <QMessageBox>
 
-//#include <pcl/io/pcd_io.h>
-//#include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
 #include <limits>
 
 using namespace std;
@@ -159,62 +159,62 @@ bool readMultiImage3D(const string fileName,IMAGE3D *image,int num)
     return true;
 }
 
-//bool readFromPCD(IMAGE3D *image, int width, int height, const string fileNameCoorNorm)
-//{
-//    int size=width*height;
+bool readFromPCD(IMAGE3D *image, int width, int height, const string fileNameCoorNorm)
+{
+    int size=width*height;
 
-//    pcl::PointCloud<pcl::PointNormal>::Ptr cloud (new pcl::PointCloud<pcl::PointNormal> ());
-//    pcl::io::loadPCDFile<pcl::PointNormal>(fileNameCoorNorm, *cloud);
+    pcl::PointCloud<pcl::PointNormal>::Ptr cloud (new pcl::PointCloud<pcl::PointNormal> ());
+    pcl::io::loadPCDFile<pcl::PointNormal>(fileNameCoorNorm, *cloud);
 
-//    for(int i=0,k=0;i<size;i++){
-//        if(image[i].mask && k<cloud->width){
-//            for(int j=0;j<3;j++){
-//                image[i].text[j]=0;
-//                switch(j){
-//                case 0:
-//                    image[i].coor[j]=cloud->points[k].x;
-//                    image[i].norm[j]=cloud->points[k].normal_x;
-//                    break;
-//                case 1:
-//                    image[i].coor[j]=cloud->points[k].y;
-//                    image[i].norm[j]=cloud->points[k].normal_y;
-//                    break;
-//                case 2:
-//                    image[i].coor[j]=cloud->points[k].z;
-//                    image[i].norm[j]=cloud->points[k].normal_z;
-//                    break;
-//                }
-//            }
-//            k++;
-//        }
-//    }
+    for(int i=0,k=0;i<size;i++){
+        if(image[i].mask && k<cloud->width){
+            for(int j=0;j<3;j++){
+                image[i].text[j]=0;
+                switch(j){
+                case 0:
+                    image[i].coor[j]=cloud->points[k].x;
+                    image[i].norm[j]=cloud->points[k].normal_x;
+                    break;
+                case 1:
+                    image[i].coor[j]=cloud->points[k].y;
+                    image[i].norm[j]=cloud->points[k].normal_y;
+                    break;
+                case 2:
+                    image[i].coor[j]=cloud->points[k].z;
+                    image[i].norm[j]=cloud->points[k].normal_z;
+                    break;
+                }
+            }
+            k++;
+        }
+    }
 
-//    //计算单位法向量
-//    Point p0,p1,p2,pNormal;
-//        for(int j=0;j<height-1;j++){
-//            for(int k=0;k<width-1;k++){
-//                int n=j*width+k; //像素索引，不计算最右列和最下行
-//                /*
-//                p0.----->.p1
-//                  |
-//                  |
-//                  |
-//                  v
-//                P2.
-//                */
-//                p0=image[n].coor;
-//                p1=image[n+1].coor;
-//                p2=image[n+width].coor;
+    //计算单位法向量
+    Point p0,p1,p2,pNormal;
+        for(int j=0;j<height-1;j++){
+            for(int k=0;k<width-1;k++){
+                int n=j*width+k; //像素索引，不计算最右列和最下行
+                /*
+                p0.----->.p1
+                  |
+                  |
+                  |
+                  v
+                P2.
+                */
+                p0=image[n].coor;
+                p1=image[n+1].coor;
+                p2=image[n+width].coor;
 
-//                if(image[n].mask && image[n+1].mask && image[n+width].mask){ //如果数据有效，则计算
-//                    pNormal=(p0-p2)^(p0-p1); //计算向量积，法向量垂直纸面向外
-//                    image[n].norm=pNormal/pNormal.norm(); //单位化
-//                }
-//            }
-//        }
+                if(image[n].mask && image[n+1].mask && image[n+width].mask){ //如果数据有效，则计算
+                    pNormal=(p0-p2)^(p0-p1); //计算向量积，法向量垂直纸面向外
+                    image[n].norm=pNormal/pNormal.norm(); //单位化
+                }
+            }
+        }
 
-//    return true;
-//}
+    return true;
+}
 
 bool writeImage3DCoordinates(const std::string fileName,IMAGE3D *image,int width,int height)
 {
@@ -242,57 +242,57 @@ bool writeImage3DCoordinates(const std::string fileName,IMAGE3D *image,int width
     return true;
 }
 
-//bool writeToPCD(const std::string fileName,IMAGE3D *image,int width,int height)
-//{
-//    pcl::PointCloud<pcl::PointXYZ> cloud;
+bool writeToPCD(const std::string fileName,IMAGE3D *image,int width,int height)
+{
+    pcl::PointCloud<pcl::PointXYZ> cloud;
 
-//    // Fill in the cloud data
-//    cloud.width    = width;
-//    cloud.height   = height;
-//    cloud.is_dense = true;
-//    cloud.points.resize (cloud.width * cloud.height);
+    // Fill in the cloud data
+    cloud.width    = width;
+    cloud.height   = height;
+    cloud.is_dense = false; // might contain Inf/NaN values
+    cloud.points.resize (cloud.width * cloud.height);
 
-//    float nan=std::numeric_limits<float>::quiet_NaN();
+    float nan=std::numeric_limits<float>::quiet_NaN();
 
-//    for(int i=0;i<height;i++){
-//        for(int j=0;j<width;j++){
-//            int idx=j+width*i;
-//            if(image[idx].mask && j>=int(250+(5*rand()/(RAND_MAX+1.0))) && i>int(0+(10*rand()/(RAND_MAX+1.0))) ){ //250,700
-//            //if(image[idx].mask && j<=(int)(700+(5*rand()/(RAND_MAX+1.0))) && i<int(768-(40*rand()/(RAND_MAX+1.0))) ){
-//                cloud.points[idx].x=float(image[idx].coor.x);
-//                cloud.points[idx].y=float(image[idx].coor.y);
-//                cloud.points[idx].z=float(image[idx].coor.z);
+    for(int i=0;i<height;i++){
+        for(int j=0;j<width;j++){
+            int idx=j+width*i;
+            if(image[idx].mask /*&& j>=int(250+(5*rand()/(RAND_MAX+1.0))) && i>int(0+(10*rand()/(RAND_MAX+1.0)))*/ ){ //250,700
+            //if(image[idx].mask && j<=(int)(700+(5*rand()/(RAND_MAX+1.0))) && i<int(768-(40*rand()/(RAND_MAX+1.0))) ){
+                cloud.points[idx].x=float(image[idx].coor.x);
+                cloud.points[idx].y=float(image[idx].coor.y);
+                cloud.points[idx].z=float(image[idx].coor.z);
 
+/*
+                cloud.points[idx].x+=0.1 * rand () / (RAND_MAX + 1.0);
+                cloud.points[idx].y+=0.5 * rand () / (RAND_MAX + 1.0);
+                cloud.points[idx].z+=0.1 * rand () / (RAND_MAX + 1.0);
+*/
 
-//                cloud.points[idx].x+=0.1 * rand () / (RAND_MAX + 1.0);
-//                cloud.points[idx].y+=0.5 * rand () / (RAND_MAX + 1.0);
-//                cloud.points[idx].z+=0.1 * rand () / (RAND_MAX + 1.0);
+                /*
+                cloud.points[idx].x+=0.05 * rand () / (RAND_MAX + 1.0);
+                cloud.points[idx].y+=1 * rand () / (RAND_MAX + 1.0);
+                cloud.points[idx].z+=0.05 * rand () / (RAND_MAX + 1.0);
+                */
+                /*
+                float y,z,pi=3.1415926;
+                y=cloud.points[idx].y*cos(-pi/12)-cloud.points[idx].z*sin(-pi/12);
+                z=cloud.points[idx].y*sin(-pi/12)+cloud.points[idx].z*cos(-pi/12);
+                cloud.points[idx].y=y;
+                cloud.points[idx].z=z;
+                */
+            }
+            else{ // 无效点在PCD文件中表示为NaN
+                cloud.points[idx].x=nan;
+                cloud.points[idx].y=nan;
+                cloud.points[idx].z=nan;
+            }
+        }
+    }
 
+    if(pcl::io::savePCDFileBinary(fileName, cloud) != 0){
+        return false;
+    }
 
-//                /*
-//                cloud.points[idx].x+=0.05 * rand () / (RAND_MAX + 1.0);
-//                cloud.points[idx].y+=1 * rand () / (RAND_MAX + 1.0);
-//                cloud.points[idx].z+=0.05 * rand () / (RAND_MAX + 1.0);
-//                */
-//                /*
-//                float y,z,pi=3.1415926;
-//                y=cloud.points[idx].y*cos(-pi/12)-cloud.points[idx].z*sin(-pi/12);
-//                z=cloud.points[idx].y*sin(-pi/12)+cloud.points[idx].z*cos(-pi/12);
-//                cloud.points[idx].y=y;
-//                cloud.points[idx].z=z;
-//                */
-//            }
-//            else{
-//                cloud.points[idx].x=nan;
-//                cloud.points[idx].y=nan;
-//                cloud.points[idx].z=nan;
-//            }
-//        }
-//    }
-
-//    if(pcl::io::savePCDFileBinary (fileName, cloud) != 0){
-//        return false;
-//    }
-
-//    return true;
-//}
+    return true;
+}

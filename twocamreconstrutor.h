@@ -14,8 +14,8 @@ public:
     bool init();
 
     bool reconstruct(IMAGE3D *image,double *phase,unsigned char *texture,unsigned char *mask);
-private:
-    bool paraInit(const std::string &fileName);
+//private:
+    bool paraInit(const std::string &fileName, bool use_old = false);
     bool readxncam(const std::string &fileNameL,const std::string &fileNameR);
     Point computeCoor(Point uc,Point up,bool isL2R1);
     Point computeCoorH(Point uc,Point up,bool isL2R1);

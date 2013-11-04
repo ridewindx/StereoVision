@@ -3,7 +3,8 @@
 
 #include <QMainWindow>
 #include "globals.h"
-#include "cameramv.h"
+#include "camera.h"
+#include "camerapointgrey.h"
 #include "cameraviewer.h"
 #include "projection.h"
 #include "combinedmodelmaker.h"
@@ -20,6 +21,7 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
+
 private slots:
     void on_actionHorizontal_1_triggered();
 
@@ -65,19 +67,18 @@ private slots:
 
     void on_actionOpen_Triggered_Cameras_triggered();
 
-    void on_actionCameras_Viewer_triggered();
+    void on_actionClose_Cameras_triggered();
 
-    void grabFrames();
-    void startCameraTimer();
-    void stopCameraTimer();
-    void snapshot(int spinIndex=-1);
+    void on_actionCameras_Viewer_triggered();
 
     void on_actionProjection_Control_triggered();
 
     void on_actionProject_and_Capture_triggered();
-    void projectAndCaptureTimer();
+    void projectAndCaptureAction();
 
     void on_actionNine_Images_Average_triggered();
+
+    void on_actionNine_Images_Gray_Code_Maker_triggered();
 
 private:
     void projectFringes(FringeType fringeType);
@@ -88,14 +89,16 @@ private:
     Ui::MainWindow *ui;
 
     //Cameras
-    Camera *camera;
-    unsigned char *frmL,*frmR;
+    ::Camera *camera;
+    unsigned char *frmL, *frmR;
     CameraViewer *cameraViewer;
+    /*
     QTimer *cameraTimer;
     QPushButton *startButn;
     QPushButton *stopButn;
     QSpinBox *snapshotSpin;
     QPushButton *snapshotButn;
+    */
 
     //Projection
     Projection *projection;
@@ -104,6 +107,7 @@ private:
     QTimer *pcTimer;
 
     NineImagesMaker nineImagesMaker;
+    NineWithGrayCodeMaker nineGrayCodeMaker;
 
     ModelShow *modelShow;
 };

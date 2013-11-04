@@ -9,8 +9,8 @@ extern int projectionHeight;
 enum FringeType{
     HF0,HF1,HF2,VF0,VF1,VF2,HC,VC,BK,
     WT,
-    GCH0,GCH1,GCH2,GCH3,GCH4,GCH5,GCH6,GCH7,GCH8,
-    GCV0,GCV1,GCV2,GCV3,GCV4,GCV5,GCV6,GCV7,GCV8
+    GCH0,GCH1,GCH2,GCH3,GCH4,GCH5,GCH6,GCH7,GCH8,GCH9,
+    GCV0,GCV1,GCV2,GCV3,GCV4,GCV5,GCV6,GCV7,GCV8,GCV9
 };
 
 namespace Ui {
@@ -41,6 +41,10 @@ public:
     QDialog *controlDialog;
 
 private:
+    int nBits;
+    int maxCode;
+    int offsetH;
+    int offsetV;
     unsigned int *hCode;
     unsigned int *vCode;
 };

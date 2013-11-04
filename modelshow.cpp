@@ -99,6 +99,26 @@ void ModelShow::make()
     Point c[4],n[4],t[4];
     bool m[4];
     int idx[4][2]={{0,0},{1,0},{0,1},{1,1}};
+
+    int num = 0;
+    for(int i=1;i<height-1;i++){
+        for(int j=1;j<width-1;j++){
+            for(int k=0;k<4;k++){
+                int id=(i+idx[k][0])*width+(j+idx[k][1]);
+                m[k]=image[id].mask;
+            }
+            if(m[0]&&m[1]&&m[2]){
+                num++;
+            }
+            if(m[1]&&m[3]&&m[2]){
+                num++;
+            }
+        }
+    }
+    std::cout<<num<<"\n"<<std::flush;
+    vertices.reserve(num*3);
+    normals.reserve(num*3);
+
     for(int i=1;i<height-1;i++){
         for(int j=1;j<width-1;j++){
             for(int k=0;k<4;k++){

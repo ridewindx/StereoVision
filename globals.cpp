@@ -1,7 +1,7 @@
 #include "globals.h"
 
-//#define IMG1024
-#define IMG640
+#define IMG1024
+//#define IMG640
 //#define IMG1600
 //#define IMG2448
 
@@ -22,4 +22,4 @@ unsigned int imageWidth=2448;
 unsigned int imageHeight=2048;
 #endif
 
-QString workDirectory;
+QString workDirectory = "";

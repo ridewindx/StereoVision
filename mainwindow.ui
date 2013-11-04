@@ -20,7 +20,7 @@
      <x>0</x>
      <y>0</y>
      <width>1000</width>
-     <height>23</height>
+     <height>17</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -36,6 +36,7 @@
     </property>
     <addaction name="actionOpen_Cameras"/>
     <addaction name="actionOpen_Triggered_Cameras"/>
+    <addaction name="actionClose_Cameras"/>
     <addaction name="actionCameras_Viewer"/>
    </widget>
    <widget class="QMenu" name="menuProjection">
@@ -66,6 +67,7 @@
      <string>Modeling</string>
     </property>
     <addaction name="actionNine_Images_Maker"/>
+    <addaction name="actionNine_Images_Gray_Code_Maker"/>
    </widget>
    <widget class="QMenu" name="menuTools">
     <property name="title">
@@ -235,6 +237,16 @@
   <action name="actionNine_Images_Average">
    <property name="text">
     <string>Nine Images Average</string>
+   </property>
+  </action>
+  <action name="actionNine_Images_Gray_Code_Maker">
+   <property name="text">
+    <string>Nine Images Gray Code Maker</string>
+   </property>
+  </action>
+  <action name="actionClose_Cameras">
+   <property name="text">
+    <string>Close Cameras</string>
    </property>
   </action>
  </widget>

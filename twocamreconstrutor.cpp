@@ -3,6 +3,9 @@
 #include <fstream>
 
 #include <QtGUI>
+#include <QMessageBox>
+
+#include "calib.h"
 
 #define UNWRAPDONE 11
 
@@ -24,7 +27,10 @@ TwocamReconstrutor::~TwocamReconstrutor()
 
 bool TwocamReconstrutor::init()
 {
+    bool use_old = true; //是否使用旧的读参方式
+
     QDir dir(workDirectory); //进入工作目录
+
     dir.mkdir("TwoCamCalibData"); //建立"TwoCamCalibData"目录，或者已经存在
     //QString dirSelected=QFileDialog::getExistingDirectory(NULL,"Select Directory with file \"CalibParameters.txt\"",dir.absolutePath()); //选择目录对话框
     //if(!dirSelected.isEmpty()){ //选择的目录
@@ -34,87 +40,161 @@ bool TwocamReconstrutor::init()
         dir.cd(QString("TwoCamCalibData"));
     //}
 
-    if(!( dir.exists("CalibParameters.txt") && dir.exists("xncamL.txt") && dir.exists("xncamR.txt") )){
-        QMessageBox::warning(NULL,QString("File finding error!"),QString("\"CalibParameters.txt\", \"xncamL.txt\", \"xncamL.txt\" don\'t exists!"));
-        return false;
+    if (!( dir.exists("CalibParameters.txt") && dir.exists("xncamL.txt") && dir.exists("xncamR.txt") )) {
+        /*
+        QMessageBox::warning(NULL, QString("File finding error!"),
+                             QString("\"CalibParameters.txt\", \"xncamL.txt\", \"xncamL.txt\" don\'t exists!\n"
+                                     "Please check."));*/
+        use_old = false;
     }
 
-    QString paraFile=dir.absoluteFilePath(QString("CalibParameters.txt"));
-    QString xncamLFile=dir.absoluteFilePath(QString("xncamL.txt"));
-    QString xncamRFile=dir.absoluteFilePath(QString("xncamR.txt"));
-    if(!paraInit(paraFile.toStdString()) || !readxncam(xncamLFile.toStdString(),xncamRFile.toStdString())){
+    QString paraFile = dir.absoluteFilePath(QString("CalibParameters.txt"));
+    QString xncamLFile = dir.absoluteFilePath(QString("xncamL.txt"));
+    QString xncamRFile = dir.absoluteFilePath(QString("xncamR.txt"));
+
+    if (use_old) {
+        if (!paraInit(paraFile.toStdString(), true) || !readxncam(xncamLFile.toStdString(), xncamRFile.toStdString())) {
+            QMessageBox::warning(NULL,QString("Opening file error!"),QString("Opening file error!"));
+            return false;
+        }
+        return true;
+    }
+
+
+    QString cameraFiles[2];
+    dir.cdUp();
+    dir.cd(QString("L"));
+    cameraFiles[0] = dir.absoluteFilePath(QString("Calib_Results.m"));
+    if (!dir.exists("Calib_Results.m")) {
+        QMessageBox::warning(NULL, QString("File finding error!"),
+                             cameraFiles[0] + " doesn\'t exists!\nPlease check.");
+        return false;
+    }
+    dir.cdUp();
+    dir.cd(QString("R"));
+    cameraFiles[1] = dir.absoluteFilePath(QString("Calib_Results.m"));
+    if (!dir.exists("Calib_Results.m")) {
+        QMessageBox::warning(NULL, QString("File finding error!"),
+                             cameraFiles[1] + " doesn\'t exists!\nPlease check.");
+        return false;
+    }
+    calib::readCalibParams(cameraFiles);
+
+    QString normalFiles[2];
+    dir.cdUp();
+    dir.cd(QString("L"));
+    normalFiles[0] = dir.absoluteFilePath(QString("xncamL.txt"));
+    bool isL = dir.exists("xncamL.txt");
+    dir.cdUp();
+    dir.cd(QString("R"));
+    normalFiles[1] = dir.absoluteFilePath(QString("xncamR.txt"));
+    bool isR = dir.exists("xncamR.txt");
+    if (!isL && !isR)
+        calib::computeNormalizedProjections(normalFiles);
+
+    if (!paraInit("", false) || !readxncam(normalFiles[0].toStdString(), normalFiles[1].toStdString())) {
         QMessageBox::warning(NULL,QString("Opening file error!"),QString("Opening file error!"));
         return false;
     }
+
     return true;
 }
 
-bool TwocamReconstrutor::paraInit(const std::string &fileName)
+bool TwocamReconstrutor::paraInit(const std::string &fileName, bool use_old)
 {
-    ifstream inFile(fileName.c_str());
-    if(!inFile.is_open()){
-        cerr<<"Failed to open "<<fileName<<" for reading"<<endl;
-        return false;
+    if (use_old) {
+        ifstream inFile(fileName.c_str());
+        if(!inFile.is_open()){
+            cerr<<"Failed to open "<<fileName<<" for reading"<<endl;
+            return false;
+        }
+        double camLFL[2],camRFL[2]; //Focal Length
+        double camLPP[2],camRPP[2]; //Principle Point
+
+        //Left camera instrinsic parameters
+        for(int i=0;i<3;i++)
+            inFile.ignore(255,'\n');
+        inFile>>camLFL[0];inFile>>camLFL[1];
+        for(int i=0;i<2;i++)
+            inFile.ignore(255,'\n');
+        inFile>>camLPP[0];inFile>>camLPP[1];
+
+        //Right camera instrinsic parameters
+        for(int i=0;i<3;i++)
+            inFile.ignore(255,'\n');
+        inFile>>camRFL[0];inFile>>camRFL[1];
+        for(int i=0;i<2;i++)
+            inFile.ignore(255,'\n');
+        inFile>>camRPP[0];inFile>>camRPP[1];
+
+        //Left camera extrinsic parameters
+        for(int i=0;i<5;i++)
+            inFile.ignore(255,'\n');
+        //Translation
+        for(int i=0;i<3;i++)
+            inFile>>camLTrans[i];
+        for(int i=0;i<2;i++)
+            inFile.ignore(255,'\n');
+        //Rotation
+        for(int i=0;i<9;i++)
+            inFile>>camLRot.m[i/3][i%3]; //按行读取
+
+        //Right camera extrinsic parameters
+        for(int i=0;i<3;i++)
+            inFile.ignore(255,'\n');
+        //Translation
+        for(int i=0;i<3;i++)
+            inFile>>camRTrans[i];
+        for(int i=0;i<2;i++)
+            inFile.ignore(255,'\n');
+        //Rotation
+        for(int i=0;i<9;i++)
+            inFile>>camRRot.m[i/3][i%3]; //按行读取
+
+        inFile.close();
+
+        double mL[3][3]={ {camLFL[0],         0, camLPP[0]},
+                          {        0, camLFL[1], camLPP[1]},
+                          {        0,         0,         1} };
+        camRIntrinsic=Mat3(mL);
+        double mR[3][3]={ {camRFL[0],         0, camRPP[0]},
+                          {        0, camRFL[1], camRPP[1]},
+                          {        0,         0,         1} };
+        camLIntrinsic=Mat3(mR);
+
+        AA=camRIntrinsic*camRRot*camLRot.inverse()*camLIntrinsic.inverse();
+        TT=camRIntrinsic*camRTrans-camRIntrinsic*camRRot*camLRot.inverse()*camLTrans;
+
+        //AA=camLIntrinsic*camLRot*camRRot.inverse()*camRIntrinsic.inverse();
+        //TT=camLIntrinsic*camLTrans-camLIntrinsic*camLRot*camRRot.inverse()*camRTrans;
     }
-    double camLFL[2],camRFL[2]; //Focal Length
-    double camLPP[2],camRPP[2]; //Principle Point
-
-    //Left camera instrinsic parameters
-    for(int i=0;i<3;i++)
-        inFile.ignore(255,'\n');
-    inFile>>camLFL[0];inFile>>camLFL[1];
-    for(int i=0;i<2;i++)
-        inFile.ignore(255,'\n');
-    inFile>>camLPP[0];inFile>>camLPP[1];
-
-    //Right camera instrinsic parameters
-    for(int i=0;i<3;i++)
-        inFile.ignore(255,'\n');
-    inFile>>camRFL[0];inFile>>camRFL[1];
-    for(int i=0;i<2;i++)
-        inFile.ignore(255,'\n');
-    inFile>>camRPP[0];inFile>>camRPP[1];
-
-    //Left camera extrinsic parameters
-    for(int i=0;i<5;i++)
-        inFile.ignore(255,'\n');
-    //Translation
-    for(int i=0;i<3;i++)
-        inFile>>camLTrans[i];
-    for(int i=0;i<2;i++)
-        inFile.ignore(255,'\n');
-    //Rotation
-    for(int i=0;i<9;i++)
-        inFile>>camLRot.m[i/3][i%3]; //按行读取
-
-    //Right camera extrinsic parameters
-    for(int i=0;i<3;i++)
-        inFile.ignore(255,'\n');
-    //Translation
-    for(int i=0;i<3;i++)
-        inFile>>camRTrans[i];
-    for(int i=0;i<2;i++)
-        inFile.ignore(255,'\n');
-    //Rotation
-    for(int i=0;i<9;i++)
-        inFile>>camRRot.m[i/3][i%3]; //按行读取
-
-    inFile.close();
-
-    double mL[3][3]={ {camLFL[0],         0, camLPP[0]},
-                      {        0, camLFL[1], camLPP[1]},
-                      {        0,         0,         1} };
-    camLIntrinsic=Mat3(mL);
-    double mR[3][3]={ {camRFL[0],         0, camRPP[0]},
-                      {        0, camRFL[1], camRPP[1]},
-                      {        0,         0,         1} };
-    camRIntrinsic=Mat3(mR);
-
-    AA=camRIntrinsic*camRRot*camLRot.inverse()*camLIntrinsic.inverse();
-    TT=camRIntrinsic*camRTrans-camRIntrinsic*camRRot*camLRot.inverse()*camLTrans;
-
-    //AA=camLIntrinsic*camLRot*camRRot.inverse()*camRIntrinsic.inverse();
-    //TT=camLIntrinsic*camLTrans-camLIntrinsic*camLRot*camRRot.inverse()*camRTrans;
+    else {
+        using namespace calib;
+        double mL[3][3]={ {  fc_l[0],         0,   cc_l[0]},
+                          {        0,   fc_l[1],   cc_l[1]},
+                          {        0,         0,         1} };
+        camLIntrinsic=Mat3(mL);
+        double mR[3][3]={ {  fc_r[0],         0,   cc_r[0]},
+                          {        0,   fc_r[1],   cc_r[1]},
+                          {        0,         0,         1} };
+        camRIntrinsic=Mat3(mR);
+        for(int i=0;i<3;i++) {
+            camLTrans[i] = t_l[i];
+            camRTrans[i] = t_r[i];
+            //camRTrans[i] = t_l[i];
+            //camLTrans[i] = t_r[i];
+        }
+        for(int i=0;i<9;i++) {
+            camLRot.m[i/3][i%3] = r_l[i];
+            camRRot.m[i/3][i%3] = r_r[i];
+            //camRRot.m[i/3][i%3] = r_l[i];
+            //camLRot.m[i/3][i%3] = r_r[i];
+        }
+        //AA=camRIntrinsic*camRRot*camLRot.inverse()*camLIntrinsic.inverse();
+        //TT=camRIntrinsic*camRTrans-camRIntrinsic*camRRot*camLRot.inverse()*camLTrans;
+        AA=camLIntrinsic*camLRot*camRRot.inverse()*camRIntrinsic.inverse();
+        TT=camLIntrinsic*camLTrans-camLIntrinsic*camLRot*camRRot.inverse()*camRTrans;
+    }
 
     return true;
 }
@@ -143,10 +223,10 @@ bool TwocamReconstrutor::readxncam(const std::string &fileNameL,const std::strin
 
 bool TwocamReconstrutor::reconstruct(IMAGE3D *image,double *phase,unsigned char *texture,unsigned char *mask)
 {
-    double *phaseHoriL=phase;
-    double *phaseVertL=&phase[size];
-    double *phaseHoriR=&phase[size*2];
-    double *phaseVertR=&phase[size*3];
+    double *phaseHoriL=phase; // 左水平
+    double *phaseVertL=&phase[size]; // 左垂直
+    double *phaseHoriR=&phase[size*2]; // 右水平
+    double *phaseVertR=&phase[size*3]; // 右垂直
     unsigned char *maskHoriL=mask;
     unsigned char *maskVertL=&mask[size];
     unsigned char *maskHoriR=&mask[size*2];
@@ -160,7 +240,7 @@ bool TwocamReconstrutor::reconstruct(IMAGE3D *image,double *phase,unsigned char 
 
         for(int i=0;i<width;i++){ //begin for 2
         //for (int j=0;j<height;j++){
-            int idx=i+j*width;
+            int idx=i+j*width; // index of the point in the right camera
 
             //if the point is valid in the right camera, then we try to find it in the left camera
             if(maskHoriR[idx]==UNWRAPDONE && maskVertR[idx]==UNWRAPDONE){ //begin if 1
@@ -175,7 +255,7 @@ bool TwocamReconstrutor::reconstruct(IMAGE3D *image,double *phase,unsigned char 
                 xy2=xy2/xy2[2]; //直线上另一点
 
                 double k=(xy1[1]-xy2[1])/(xy1[0]-xy2[0]); //直线斜率
-                double newj=(i-xy1[0])*k+xy1[1]; //直线上横坐标为i的点
+                double newj=(i-xy1[0])*k+xy1[1]; //直线上横坐标为i的点, (i,newj)
                 //double newi=(j-xy1[1])/k+xy1[0];
 
                 //searching area band搜索带宽的一半
@@ -250,7 +330,12 @@ bool TwocamReconstrutor::reconstruct(IMAGE3D *image,double *phase,unsigned char 
                     continue;
                 }
 
-                int id=(temph*width+tempw);
+                int id=(temph*width+tempw); // 左边相机中的匹配点索引
+
+                //if (i>=1441&&i<=1443&&j>=1732&&j<=1734) {
+                if (i>=230&&i<=232&&j>=268&&j<=270) {
+                    std::cout<<"Pixel ("<<tempw<<","<<temph<<")\n";
+                }
 
                 //double thresh=0.2; //判断相似的阈值
                 //double thresh=0.1;
@@ -401,11 +486,18 @@ bool TwocamReconstrutor::reconstruct(IMAGE3D *image,double *phase,unsigned char 
 
                     //newtempw=xncamL[int(temph + tempw*height)*2];
                     //newtemph=xncamL[int(temph + tempw*height)*2+1];
-                    Point uc0(uc,vc,1);
-                    Point up0(newtempw,newtemph,1);
+                    // 规范化坐标
+                    Point uc0(uc,vc,1); // 右边
+                    Point up0(newtempw,newtemph,1); // 左边
 
                     image[idx].coor=computeCoor(uc0,up0,1); //空间点的三维坐标
                     //image[idx].coor=computeCoor(uc0,up0,0);
+                    //image[idx].coor=computeCoor(up0,uc0,1);
+
+                    //if (i>=1441&&i<=1443&&j>=1732&&j<=1734) {
+                    if (i>=230&&i<=232&&j>=268&&j<=270) {
+                        std::cout<<"Pixel ("<<tempw<<","<<tht<<","<<i<<","<<j<<") -> Point ("<<  image[idx].coor.x<<","<<image[idx].coor.y<<","<<image[idx].coor.z<<")\n";
+                    }
 
                     image[idx].text[0]=image[idx].text[1]=image[idx].text[2]=texture[idx]/255.f; //纹理intensity，0~1
                     //if((image[idx].coor[2]>-1000) && (image[idx].coor[2]<1000))
@@ -456,7 +548,7 @@ Point TwocamReconstrutor::computeCoor(Point uc,Point up,bool isL2R1)
     Mat3 A;
     Point b;
     double r[4][3];double t[4];
-    if(isL2R1){ //左2右1
+    if(!isL2R1){ //左1右2
         for(int k=0;k<3;k++){
             for(int i=0;i<2;i++){
                 //A.m[i][k]=uc[i]*camLRot.m[2][k]-camLRot.m[i][k];
@@ -474,7 +566,7 @@ Point TwocamReconstrutor::computeCoor(Point uc,Point up,bool isL2R1)
             }
         }
     }
-    else{ //右2左1
+    else{ //左2右1
         for(int k=0;k<3;k++){
             for(int i=0;i<2;i++){
                 //A.m[i][k]=uc[i]*camRRot.m[2][k]-camRRot.m[i][k];

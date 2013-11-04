@@ -22,7 +22,7 @@ bool readMultiImage3D(const std::string fileName,IMAGE3D *image,int num);
 
 bool writeImage3DCoordinates(const std::string fileName,IMAGE3D *image,int width, int height);
 
-//bool writeToPCD(const std::string fileName,IMAGE3D *image,int width,int height);
-//bool readFromPCD(IMAGE3D *image, int width, int height, const std::string fileNameCoorNorm);
+bool writeToPCD(const std::string fileName,IMAGE3D *image,int width,int height);
+bool readFromPCD(IMAGE3D *image, int width, int height, const std::string fileNameCoorNorm);
 
 #endif // IMAGEIO_H

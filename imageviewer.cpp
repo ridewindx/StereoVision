@@ -2,6 +2,8 @@
 #include "ui_imageviewer.h"
 
 #include <QtGUI>
+#include <QFileDialog>
+#include <QMessageBox>
 #include "globals.h"
 #include "imageIO.h"
 #include "imageshow.h"

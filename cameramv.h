@@ -12,7 +12,7 @@ public:
     CameraMV(int width, int height);
     ~CameraMV();
 
-    int initial(bool isTrigger=true);
+    int init(bool isTrigger=true);
     int connect(int devNum = 0, int * setting = 0, int sizeOfSetting = 0);
     int close();
 

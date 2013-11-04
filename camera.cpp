@@ -4,6 +4,7 @@ Camera::Camera(int width, int height)
 {
     this->width=width;
     this->height=height;
+    size = width * height;
 }
 
 Camera::~Camera()

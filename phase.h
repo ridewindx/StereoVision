@@ -3,53 +3,60 @@
 
 //#include <cmath>
 #ifndef M_PI
-#define M_PI		3.14159265358979323846
+#define M_PI 3.14159265358979323846
 #endif
+#ifndef M_2PI
 #define M_2PI (M_PI*2)
+#endif
 
 #define UNWRAPDONE 11
 
 class Phase
 {
 public:
-    Phase(int w,int h,bool if_absolute,double maskThresh,unsigned char *frmPtr[3],double *phase,unsigned char *texture,unsigned char *mask);
+    Phase(int w, int h, bool if_absolute, double maskThresh,
+          unsigned char *frmPtr[3], double *phase,
+          unsigned char *texture,unsigned char *mask);
+
     ~Phase();
 
     void computePhase();
-    void convertToAbsolute(unsigned char *centerline,bool isHorizontal);
-    void computePhaseWrap();
+    void convertToAbsolute(unsigned char *image_with_centerline, bool isHorizontal);
+
+    void computePhaseWrap(); // deprecated
 
     void phaseFilter();
 
 protected:
-    bool phaseWrapOnly();
+    bool phaseWrapOnly(); // deprecated
     bool phaseWrap();
     bool phaseUnwrap();
 
 
-    void findHCenterLine(const unsigned char *centerLine, int *center); //寻找水平中心线
-    void findVCenterLine(const unsigned char *centerLine, int *center); //寻找垂直中心线
-    void convert2Absolute(int *centPtr, const int & lineLength , unsigned char *centerline);
+    void findHCenterLine(const unsigned char *image_with_centerline, int *centerline_indices); //寻找水平中心线
+    void findVCenterLine(const unsigned char *image_with_centerline, int *centerline_indices); //寻找垂直中心线
 
     void compute1DGuass(double *filter,int filtersize);
 
 
-    int width,height,size;
+    int width, height, size;
 
-    double *phx;
+    double *phx; // phase derivatives
     double *phy;
-    double maskThresh;
-    bool if_absolute;
+    double maskThresh; // threshhold for data modulation
+    bool if_absolute; // deprecated
 
-    bool selectStartPt;
+    bool selectStartPt; // deprecated
     int idxStart;
 
     double *guassFilter;
     int guassFilterSize;
 
     unsigned char *fPtr[3];
-    double *phase;
-    unsigned char *texture,*mask;
+
+    double *phase; // phase
+    unsigned char *texture;
+    unsigned char *mask; // quality, 0 ~ 9, or unwrapdown 11
 };
 
 #endif // PHASE_H
